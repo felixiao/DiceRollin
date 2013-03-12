@@ -13,8 +13,6 @@ class Calc(webapp.RequestHandler):
 		self.response.out.write("""
 <html>
 <Head>
-	<link rel="stylesheet" type="text/css" href="mystyle.css" />
-	<script src="calc.js" language="javascript"></script>
 	<h1>Rolling Dices </h1>
 </Head>
 <body>
@@ -36,13 +34,15 @@ app = webapp.WSGIApplication([('/', MainPage),('/calc',Calc)],debug=True)
 
 dices=[]
 res=[]
-
+calcCount=0
 
 def calc(t):
 	global dices
 	dices=[]
 	global res
 	res=[]
+	global calcCount
+	calcCount=0
 	totalP = 1
 	di=t.split('+')
 	maxVal = 0
@@ -72,7 +72,7 @@ def calc(t):
 	for q in range(minVal+1,maxVal):
 		if summary.count(q)!=0:
 			output+='Sum='+str(q)+' Freq='+str(summary.count(q))+'/20</br>'
-		
+	output+='CalcCount='+str(calcCount)+'</br>'
 	return output
 	
 def getResult():
@@ -102,7 +102,9 @@ def prob(x,y,r):
 		return x+y+1-r
 
 def probability(r,index):
+	global calcCount
 	if index==len(dices)-2:
+		calcCount+=1
 		return prob(dices[index],dices[-1],r)
 	else:
 		p=0
