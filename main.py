@@ -1,67 +1,158 @@
 import wsgiref.handlers
 from random import randint
-from google.appengine.ext import webapp
+import webapp2
 from google.appengine.ext.webapp import template
-from google.appengine.ext.webapp.util import run_wsgi_app
+import json
 
-class MainPage(webapp.RequestHandler):
+calcRes='' 
+resultPrb=[]
+maxVal=0
+class MainPage(webapp2.RequestHandler):
 	def get(self):
-		self.response.out.write(template.render('index.html',{}))
-
-class Calc(webapp.RequestHandler):
+		self.response.write(template.render('index.html',{}))
 	def post(self):
-		self.response.out.write("""
-<html>
-<Head>
-	<h1>Rolling Dices </h1>
-</Head>
-<body>
-	Please enter dices:
-	<form action="/calc" method="post">
-		""")
-		self.response.out.write('<div><input name="inpu" type="text" value="'+self.request.get('inpu')+'"/></div>')
-		self.response.out.write("""
-		<div><input type="submit" value="Roll"></div>
-	</form>
-	<p id="result">Result:</p>""")
-		
-		self.response.out.write(calc(self.request.get('inpu')))
-		self.response.out.write("""
-</body>
-</html>""")
+		global calcRes
+		# calcRes=calc(self.request.get('dice'))
 
-app = webapp.WSGIApplication([('/', MainPage),('/calc',Calc)],debug=True)
+		self.response.content_type='text/json'
+		responseText=self.request.body
+		if responseText==None:
+			self.response.body='none'
+		elif responseText=='':
+			self.response.body='empty'
+		else:
+			calc(responseText)
+			self.response.body=json.dumps(resultPrb,sort_keys=False)
+
+
+app = webapp2.WSGIApplication([('/', MainPage)],debug=True)
 
 dices=[]
 res=[]
 calcCount=0
 
+class Dice:
+	"""Single Dice"""
+	def __init__(self,d):
+		self.min=1
+		self.max=d
+	def getPrb(self,r):
+		if self.min<=r<=self.max:
+			return 1
+		else:
+			return 0
+
+class DicePair:
+	"""Dice pair"""
+	def __init__(self,a,b=None):
+		self.diceA=a
+		self.diceB=b
+		if self.diceB:
+			self.min= a.min+b.min
+			self.max= a.max+b.max
+		else:
+			self.min= a.min
+			self.max= a.max
+
+	def getPrb(self,r):
+		global calcCount
+		calcCount+=1
+		if self.diceB:
+			if self.min> r or self.max < r:
+				return 0
+			elif self.min == r:
+				return self.diceA.getPrb(self.diceA.min)*self.diceB.getPrb(self.diceB.min)
+			elif self.max == r:
+				return self.diceA.getPrb(self.diceA.max)*self.diceB.getPrb(self.diceB.max)
+			else:
+				count=0
+				max=0
+				if r-self.diceB.min>self.diceA.max:
+					max=self.diceA.max+1
+				else:
+					max=r-self.diceB.min+1
+				for i in range(self.diceA.min,max):
+					count+=self.diceA.getPrb(i)*self.diceB.getPrb(r-i)
+				return count
+		else:
+			if self.diceA.min<=r<=self.diceA.max:
+				return 1
+			else:
+				return 0
+
+def setDicePair(diceList):
+	lenght=len(diceList)
+	half=lenght/2
+	if half>1:
+		return DicePair(setDicePair(diceList[0:half]),setDicePair(diceList[half:]))
+	elif lenght==1:
+		return DicePair(Dice(diceList[0]))
+	elif lenght==2:
+		return DicePair(Dice(diceList[0]),Dice(diceList[1]))
+	else:
+		return DicePair(Dice(diceList[0]),DicePair(Dice(diceList[1]),Dice(diceList[2])))
+
+
 def calc(t):
 	global dices
 	dices=[]
-	global res
-	res=[]
+	
 	global calcCount
 	calcCount=0
+	global maxVal
 	totalP = 1
-	di=t.split('+')
+	di=t.split(',')
 	maxVal = 0
-	for i in range(0,len(di)):
-		d = di[i].split('d')
-		count=int(d[0])
-		for j in range(0,count):
-			fa=int(d[1])
-			dices.append(fa)
-			maxVal += fa
-			totalP *= fa
-			roll(fa)
+	for i in di:
+		fa=1
+		try:
+			fa=int(i)
+		except ValueError:
+			pass
+		dices.append(fa)
+		maxVal += fa
+		totalP *= fa
+		
+
+	diceP=setDicePair(dices)
 	minVal = len(dices)
-	output ='['+str(minVal)+'] 1/'+str(totalP)+'</br>'
-	for k in range(minVal+1,maxVal):
-		output +='['+str(k)+'] '+ str(probability(k,0))+'/'+str(totalP)+'</br>'
-	output +='['+str(maxVal)+'] 1/'+str(totalP)+'</br>'
+	minDice=min()
+	#calc probability
+	prob=[]
+	coun=0
+	prob.append(1)
+	global resultPrb
+	resultPrb=[]
+	resultPrb.append([minVal+coun,prob[coun]])
+	coun+=1
+	#get prob directly
+	for s in range(0,minDice-1):
+	 	prob.append(product(s,minVal))
+	 	resultPrb.append([minVal+coun,prob[coun]])
+	 	coun+=1
+	#calc rest number till half of maxNum
+	for s in range(minVal+minDice, (maxVal+minVal)/2+1):
+		prob.append(diceP.getPrb(s))
+		resultPrb.append([minVal+coun,prob[coun]])
+	 	coun+=1
+	#use the prob directly from existed half
+	for r in range(0,(maxVal-minVal+1)/2):
+		prob.append(prob[(maxVal-minVal-1)/2-r])
+		resultPrb.append([minVal+coun,prob[coun]])
+	 	coun+=1
+
+def RollingDice(count):
+	global res
+	global maxVal
+	res=[]
+	for d in dices:
+		roll(d)
+
+	output=''
 	summary=[]
-	for p in range(0,20):
+
+	#roll the dices
+	for p in range(0,count):
 		sum=0
 		for q in range(0,len(res)):
 			output+='['+str(dices[q])+']:'+str(res[q])+', '
@@ -69,11 +160,23 @@ def calc(t):
 		output+=' Sum='+str(sum)+'</br>'
 		summary.append(sum)
 		getResult()
-	for q in range(minVal+1,maxVal):
+	
+	for q in range(len(dices),maxVal+1):
 		if summary.count(q)!=0:
 			output+='Sum='+str(q)+' Freq='+str(summary.count(q))+'/20</br>'
-	output+='CalcCount='+str(calcCount)+'</br>'
 	return output
+	
+def product(i,n):
+	a = reduce(lambda   x,y:x*y,   range(n,   n+i+1))
+	b = reduce(lambda   x,y:x*y,   range(1,   i+2))
+	return a/b
+	
+def min():
+	min=dices[0]
+	for i in dices:
+		if min>i:
+			min=i
+	return min
 	
 def getResult():
 	global res
@@ -84,14 +187,15 @@ def getResult():
 def roll(face):
 	global res
 	res.append(randint(1,face))
-	
-def prob(x,y,r):
-	if x+y<r:
+
+		
+def prob2(x,y,r):
+	global calcCount
+	calcCount+=1
+	if x+y<r or r<2:
 		return 0
-	elif x+y==r:
+	elif x+y==r or r==2:
 		return 1
-	elif r<2:
-		return 0
 	elif x<r and y>r-2:
 		return x
 	elif x>r-2 and y<r:
@@ -100,22 +204,8 @@ def prob(x,y,r):
 		return r-1
 	else:
 		return x+y+1-r
-
-def probability(r,index):
-	global calcCount
-	if index==len(dices)-2:
-		calcCount+=1
-		return prob(dices[index],dices[-1],r)
-	else:
-		p=0
-		for i in range(0,dices[index]):
-			if r-i-1<=0:
-				continue
-			p+=probability(r-i-1,index+1)
-		return p
-			
 def main():
-  run_wsgi_app(app)
+  app.RUN()
 
 if __name__ == "__main__":
   main()

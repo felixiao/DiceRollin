@@ -1,18 +1,59 @@
 <!DOCTYPE HTML>
 <html>
 <Head>
-<link rel="stylesheet" type="text/css" href="mystyle.css" />
-<script src="calc.js" language="javascript"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
+<script>
+var xmlHttp;
+function xmlHR(){
+	var ts=new Date();
+	xmlHttp=new XMLHttpRequest();
+	xmlHttp.onload=function(){
+		if (xmlHttp.readyState==4){
+			obj = JSON.parse(xmlHttp.responseText);
+			document.getElementById("result").innerHTML="Result:</br>"+xmlHttp.responseText+"</br>"+obj[5];
+			
+			document.getElementById("show").innerHTML="timeSpend:"+((new Date().getTime()-ts.getTime())/1000.0).toString();
+		}
+		else
+			document.getElementById("result").innerHTML="readyState="+xmlHttp.readyState;
+	}
+	xmlHttp.open("POST","/",true);
+	//xmlHttp.setRequestHeader("Content-type","text/plain");
+	
+	
+	var inpDice=document.getElementById("dic").value;
+	var dices=inpDice.split("+");
+	var numDices="";
+	for(var i=dices.length-1;i>=0;i--){
+		var num=Number(dices[i].split("d")[0]);
+		var face=Number(dices[i].split("d")[1]);
+		for(var j=num-1;j>=0;j--)
+		{
+			numDices+=face+",";
+		}
+	}
+	numDices= numDices.substr(0,numDices.length-1);
+	
+	xmlHttp.send(numDices);
+}
+</script>
 <h1>Rolling Dices </h1>
 </Head>
 <body>
-<form action="/calc" method="post">
-	Please enter dices:
-	<div><input name="inpu" id="fn" type="text" value="1d4+2d3" /></div>
-	<div><input type="submit" value="Roll"></div>
-</form>
+Please enter dices:
 
+<div><input name="dic" id="dic" type="text" value="1d4+1d5" /></div>
+<div><button id="sub" name="sub" onclick="xmlHR()">Roll</button></div>
 <p id="result">Result:</p>
+<p id="show"></p>
+<!--Graph-->
+<svg width="100%" height="100%" version="1.1"
+xmlns="http://www.w3.org/2000/svg">
 
+<circle cx="100" cy="50" r="40" stroke="black"
+stroke-width="2" fill="red"/>
+
+</svg>
+<!--end Graph-->
 </body>
 </html>
